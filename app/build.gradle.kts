@@ -80,6 +80,9 @@ dependencies {
     // Biometric
     implementation("androidx.biometric:biometric:1.1.0")
     
+    // Rich Text Editor
+    implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc08")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

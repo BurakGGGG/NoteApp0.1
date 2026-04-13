@@ -28,6 +28,8 @@ import java.util.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichText
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -42,12 +44,19 @@ fun ViewNoteScreen(
     val scrollState = rememberScrollState()
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val density = LocalDensity.current
+    val richTextState = rememberRichTextState()
+    LaunchedEffect(note.content) {
+        if (richTextState.toHtml() != note.content) {
+            richTextState.setHtml(note.content)
+        }
+    }
     
     // Eşleşmeleri güvenli bir şekilde hesapla ve önbelleğe al
-    val matches = remember(searchText, note.content) {
+    val plainTextContent = richTextState.annotatedString.text
+    val matches = remember(searchText, plainTextContent) {
         if (searchText.isBlank()) emptyList()
         else {
-            val contentLower = note.content.lowercase(Locale("tr"))
+            val contentLower = plainTextContent.lowercase(Locale("tr"))
             val searchTextLower = searchText.lowercase(Locale("tr"))
             var index = 0
             val result = mutableListOf<Int>()
@@ -325,43 +334,44 @@ fun ViewNoteScreen(
             }
             
             if (searchText.isBlank()) {
-                Text(
-                    text = note.content,
+                RichText(
+                    state = richTextState,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             } else {
-                val content = note.content
+                val baseAnnotatedString = richTextState.annotatedString
+                val contentText = baseAnnotatedString.text
                 val searchTextLower = searchText.lowercase(Locale("tr"))
-                val contentLower = content.lowercase(Locale("tr"))
+                val contentLower = contentText.lowercase(Locale("tr"))
                 
                 var lastIndex = 0
                 val highlightedText = buildAnnotatedString {
-                    while (lastIndex < content.length) {
+                    append(baseAnnotatedString)
+                    
+                    while (lastIndex < contentText.length) {
                         val startIndex = contentLower.indexOf(searchTextLower, lastIndex)
                         if (startIndex == -1) {
-                            append(content.substring(lastIndex))
                             break
                         }
                         
-                        append(content.substring(lastIndex, startIndex))
-                        
                         if (matches.indexOf(startIndex) == currentMatchIndex) {
-                            withStyle(
+                            addStyle(
                                 style = SpanStyle(
-                                    background = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                append(content.substring(startIndex, startIndex + searchText.length))
-                            }
+                                    background = MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                start = startIndex,
+                                end = startIndex + searchText.length
+                            )
                         } else {
-                            withStyle(
+                            addStyle(
                                 style = SpanStyle(
                                     background = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                )
-                            ) {
-                                append(content.substring(startIndex, startIndex + searchText.length))
-                            }
+                                ),
+                                start = startIndex,
+                                end = startIndex + searchText.length
+                            )
                         }
                         
                         lastIndex = startIndex + searchText.length

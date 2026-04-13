@@ -66,9 +66,15 @@ import kotlinx.coroutines.launch
 import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.border
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
+
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
+import com.mohamedrejeb.richeditor.ui.material3.RichText
+import androidx.core.text.HtmlCompat
 
 class MainActivity : FragmentActivity() {
     private lateinit var viewModel: NoteViewModel
@@ -1032,10 +1038,11 @@ fun NoteItem(
                 }
             } else {
                 Text(
-                    text = note.content,
+                    text = HtmlCompat.fromHtml(note.content, HtmlCompat.FROM_HTML_MODE_COMPACT).toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    maxLines = 3
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -1143,8 +1150,14 @@ fun NoteEditScreen(
     onSave: (String, String, String?) -> Unit
 ) {
     var title by remember { mutableStateOf(note?.title ?: "") }
-    var content by remember { mutableStateOf(note?.content ?: "") }
+    val richTextState = rememberRichTextState()
     var selectedTag by remember { mutableStateOf(note?.tag) }
+
+    LaunchedEffect(note) {
+        if (note != null && richTextState.toHtml() != note.content) {
+            richTextState.setHtml(note.content)
+        }
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
     val isEditMode = note != null
 
@@ -1238,21 +1251,61 @@ fun NoteEditScreen(
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                // İçerik alanı - kalan alanı doldurur, kendi iç scroll'unu kullanır
-                // Yazı yazdıkça cursor her zaman görünür kalır
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = { Text("İçerik") },
+                // Araç Çubuğu (Toolbar)
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    maxLines = Int.MAX_VALUE,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                    )
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    androidx.compose.material3.IconButton(
+                        onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) },
+                        modifier = Modifier.background(
+                            if (richTextState.currentSpanStyle.fontWeight == androidx.compose.ui.text.font.FontWeight.Bold) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                    ) {
+                        Text("B", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    androidx.compose.material3.IconButton(
+                        onClick = { richTextState.toggleSpanStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) },
+                        modifier = Modifier.background(
+                            if (richTextState.currentSpanStyle.fontStyle == androidx.compose.ui.text.font.FontStyle.Italic) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                    ) {
+                        Text("I", fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    androidx.compose.material3.IconButton(
+                        onClick = { richTextState.toggleSpanStyle(SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) },
+                        modifier = Modifier.background(
+                            if (richTextState.currentSpanStyle.textDecoration == androidx.compose.ui.text.style.TextDecoration.Underline) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                    ) {
+                        Text("U", textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    androidx.compose.material3.IconButton(
+                        onClick = { richTextState.toggleUnorderedList() },
+                        modifier = Modifier.background(
+                            if (richTextState.isUnorderedList) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                    ) {
+                        Text("•", color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                
+                // İçerik alanı - RichTextEditor
+                RichTextEditor(
+                    state = richTextState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                        .padding(16.dp),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
                 )
                 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1292,7 +1345,7 @@ fun NoteEditScreen(
                     }
                     Button(
                         onClick = {
-                            onSave(title, content, selectedTag)
+                            onSave(title, richTextState.toHtml(), selectedTag)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -1355,10 +1408,11 @@ fun DeletedNoteItem(
                     color = currentColors.textPrimary
                 )
                 Text(
-                    text = note.content,
+                    text = HtmlCompat.fromHtml(note.content, HtmlCompat.FROM_HTML_MODE_COMPACT).toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = currentColors.textPrimary.copy(alpha = 0.7f),
-                    maxLines = 2
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Text(
                     text = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
