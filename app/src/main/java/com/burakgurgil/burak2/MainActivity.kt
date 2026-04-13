@@ -1,7 +1,7 @@
 package com.burakgurgil.burak2
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,7 +63,14 @@ import kotlinx.coroutines.delay
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+import android.os.Build
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
+
+class MainActivity : FragmentActivity() {
     private lateinit var viewModel: NoteViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,6 +154,49 @@ fun NoteApp(
     val deletedNotes by viewModel.deletedNotes.collectAsState()
     val currentColors = themeColors[currentTheme] ?: themeColors[ThemeType.DEFAULT]!!
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val fragmentActivity = context as FragmentActivity
+    
+    // Kilitli not için biyometrik doğrulama
+    val authenticateAndPerform: (Note, String) -> Unit = { noteToAuth, action ->
+        if (noteToAuth.isLocked) {
+            val executor = ContextCompat.getMainExecutor(context)
+            val biometricPrompt = BiometricPrompt(
+                fragmentActivity,
+                executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        when (action) {
+                            "view" -> selectedNoteForView = noteToAuth
+                            "edit" -> selectedNoteForEdit = noteToAuth
+                            "unlock" -> viewModel.toggleLocked(noteToAuth.id, false)
+                        }
+                    }
+                }
+            )
+            
+            val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Kilitli Not")
+                .setSubtitle("Notu görüntülemek için doğrulayın")
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                promptInfoBuilder.setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                promptInfoBuilder.setDeviceCredentialAllowed(true)
+            }
+            
+            biometricPrompt.authenticate(promptInfoBuilder.build())
+        } else {
+            when (action) {
+                "view" -> selectedNoteForView = noteToAuth
+                "edit" -> selectedNoteForEdit = noteToAuth
+            }
+        }
+    }
     
     // Drag and drop için state
     var draggedNote by remember { mutableStateOf<Note?>(null) }
@@ -198,6 +247,60 @@ fun NoteApp(
         }
     }
 
+    // Not görüntüleme ekranı - tamamen ayrı bir ekran olarak göster (topBar ile çakışmasın)
+    if (selectedNoteForView != null) {
+        val note = selectedNoteForView!!
+        ViewNoteScreen(
+            note = note,
+            onDismiss = { selectedNoteForView = null },
+            onEdit = {
+                selectedNoteForEdit = note
+                selectedNoteForView = null
+            }
+        )
+        return
+    }
+
+    // Not düzenleme ekranı - tamamen ayrı bir ekran olarak göster
+    if (selectedNoteForEdit != null) {
+        val note = selectedNoteForEdit!!
+        NoteEditScreen(
+            note = note,
+            onDismiss = { selectedNoteForEdit = null },
+            onSave = { title, content, tag ->
+                viewModel.update(
+                    note.copy(
+                        title = title,
+                        content = content,
+                        tag = tag
+                    )
+                )
+                selectedNoteForEdit = null
+            }
+        )
+        return
+    }
+
+    // Yeni not ekleme ekranı - tamamen ayrı bir ekran olarak göster
+    if (showAddDialog) {
+        NoteEditScreen(
+            note = null,
+            onDismiss = { showAddDialog = false },
+            onSave = { title, content, tag ->
+                viewModel.insert(
+                    Note(
+                        title = title,
+                        content = content,
+                        tag = tag,
+                        createdAt = Date()
+                    )
+                )
+                showAddDialog = false
+            }
+        )
+        return
+    }
+
     Scaffold(
         topBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -234,7 +337,7 @@ fun NoteApp(
                         }
                     },
                     actions = {
-                        if (!showAddDialog && selectedNoteForEdit == null && selectedNoteForView == null && !showTrash) {
+                        if (!showTrash) {
                             if (!isSearchActive) {
                                 Card(
                                     modifier = Modifier
@@ -375,7 +478,7 @@ fun NoteApp(
             SnackbarHost(hostState = snackbarHostState)
         },
         floatingActionButton = {
-            if (!showAddDialog && selectedNoteForEdit == null && selectedNoteForView == null && !showTrash) {
+            if (!showTrash) {
                 FloatingActionButton(
                     onClick = { showAddDialog = true },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -557,12 +660,12 @@ fun NoteApp(
                                 note = note,
                                 onView = { 
                                     if (draggedNote == null) {
-                                        selectedNoteForView = note
+                                        authenticateAndPerform(note, "view")
                                     }
                                 },
                                 onEdit = { 
                                     if (draggedNote == null) {
-                                        selectedNoteForEdit = note
+                                        authenticateAndPerform(note, "edit")
                                     }
                                 },
                                 onDelete = { viewModel.moveToTrash(note.id) },
@@ -578,6 +681,13 @@ fun NoteApp(
                                     } else {
                                         recentlyStarredNoteId = note.id
                                         viewModel.toggleStarred(note.id, !note.isStarred)
+                                    }
+                                },
+                                onLockToggle = {
+                                    if (note.isLocked) {
+                                        authenticateAndPerform(note, "unlock")
+                                    } else {
+                                        viewModel.toggleLocked(note.id, true)
                                     }
                                 },
                                 currentTheme = currentTheme,
@@ -636,69 +746,6 @@ fun NoteApp(
                         }
                     }
                 }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showAddDialog,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-        ) {
-            NoteEditScreen(
-                note = null,
-                onDismiss = { showAddDialog = false },
-                onSave = { title, content, tag ->
-                    viewModel.insert(
-                        Note(
-                            title = title,
-                            content = content,
-                            tag = tag,
-                            createdAt = Date()
-                        )
-                    )
-                    showAddDialog = false
-                }
-            )
-        }
-
-        selectedNoteForEdit?.let { note ->
-            AnimatedVisibility(
-                visible = true,
-                enter = slideInVertically() + fadeIn(),
-                exit = slideOutVertically() + fadeOut()
-            ) {
-                NoteEditScreen(
-                    note = note,
-                    onDismiss = { selectedNoteForEdit = null },
-                    onSave = { title, content, tag ->
-                        viewModel.update(
-                            note.copy(
-                                title = title,
-                                content = content,
-                                tag = tag
-                            )
-                        )
-                        selectedNoteForEdit = null
-                    }
-                )
-            }
-        }
-
-        selectedNoteForView?.let { note ->
-            AnimatedVisibility(
-                visible = true,
-                enter = slideInVertically() + fadeIn(),
-                exit = slideOutVertically() + fadeOut(),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                ViewNoteScreen(
-                    note = note,
-                    onDismiss = { selectedNoteForView = null },
-                    onEdit = {
-                        selectedNoteForEdit = note
-                        selectedNoteForView = null
-                    }
-                )
             }
         }
 
@@ -777,11 +824,13 @@ fun NoteItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onStarred: () -> Unit,
+    onLockToggle: () -> Unit,
     currentTheme: ThemeType,
     modifier: Modifier = Modifier,
     isRecentlyStarred: Boolean = false
 ) {
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
     val currentColors = themeColors[currentTheme] ?: themeColors[ThemeType.DEFAULT]!!
     
     // Yıldızlanan not için scale pulse animasyonu
@@ -856,68 +905,139 @@ fun NoteItem(
                         ),
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    if (note.isLocked) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "Kilitli",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    modifier = Modifier.padding(start = 12.dp)
-                ) {
+                
+                // 3 nokta menüsü
+                Box {
                     Card(
                         modifier = Modifier.size(36.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = currentColors.editButton
+                            containerColor = currentColors.settingsButton
                         ),
                         elevation = CardDefaults.cardElevation(
                             defaultElevation = 2.dp,
                             pressedElevation = 1.dp
                         ),
-                        onClick = onEdit
+                        onClick = { showMenu = true }
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                CustomIcons.Edit,
-                                contentDescription = "Düzenle",
+                                Icons.Default.MoreVert,
+                                contentDescription = "Menü",
                                 tint = currentColors.textPrimary,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
-                    Card(
-                        modifier = Modifier.size(36.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = currentColors.deleteButton
-                        ),
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = 2.dp,
-                            pressedElevation = 1.dp
-                        ),
-                        onClick = { showDeleteConfirmation = true }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
                     ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                CustomIcons.TrashPlus,
-                                contentDescription = "Sil",
-                                tint = currentColors.textPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    "Düzenle",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
+                            onClick = { 
+                                showMenu = false
+                                onEdit()
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    CustomIcons.Edit,
+                                    contentDescription = null,
+                                    tint = currentColors.editButton,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    "Sil",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
+                            onClick = { 
+                                showMenu = false
+                                showDeleteConfirmation = true
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    CustomIcons.TrashPlus,
+                                    contentDescription = null,
+                                    tint = currentColors.deleteButton,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    if (note.isLocked) "Kilidi Aç" else "Kilitle",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
+                            onClick = { 
+                                showMenu = false
+                                onLockToggle()
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (note.isLocked) Icons.Default.Lock else Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        )
                     }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = note.content,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                maxLines = 3
-            )
+            
+            // İçerik - kilitli notlarda gizle
+            if (note.isLocked) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "Bu not kilitli",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontStyle = FontStyle.Italic
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            } else {
+                Text(
+                    text = note.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    maxLines = 3
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),

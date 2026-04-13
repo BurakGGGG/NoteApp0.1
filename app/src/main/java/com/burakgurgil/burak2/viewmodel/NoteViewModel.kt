@@ -73,4 +73,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleStarred(noteId: Long, isStarred: Boolean) = viewModelScope.launch {
         repository.toggleStarred(noteId, isStarred)
     }
+
+    fun toggleLocked(noteId: Long, isLocked: Boolean) = viewModelScope.launch {
+        repository.toggleLocked(noteId, isLocked)
+    }
 } 

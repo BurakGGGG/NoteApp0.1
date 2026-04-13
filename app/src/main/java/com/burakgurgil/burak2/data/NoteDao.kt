@@ -35,6 +35,9 @@ interface NoteDao {
     @Query("UPDATE notes SET isStarred = :isStarred WHERE id = :noteId")
     suspend fun toggleStarred(noteId: Long, isStarred: Boolean)
 
+    @Query("UPDATE notes SET isLocked = :isLocked WHERE id = :noteId")
+    suspend fun toggleLocked(noteId: Long, isLocked: Boolean)
+
     @Query("SELECT COUNT(*) FROM notes")
     suspend fun getNoteCount(): Int
 } 

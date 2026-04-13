@@ -63,6 +63,7 @@ dependencies {
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
+    implementation(libs.androidx.fragment.ktx)
     kapt("androidx.room:room-compiler:2.6.1")
     
     // Coroutines
@@ -75,6 +76,9 @@ dependencies {
     
     // Compose LiveData
     implementation("androidx.compose.runtime:runtime-livedata:1.5.4")
+    
+    // Biometric
+    implementation("androidx.biometric:biometric:1.1.0")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

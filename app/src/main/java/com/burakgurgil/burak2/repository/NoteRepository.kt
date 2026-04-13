@@ -39,4 +39,8 @@ class NoteRepository(private val noteDao: NoteDao) {
     suspend fun toggleStarred(noteId: Long, isStarred: Boolean) {
         noteDao.toggleStarred(noteId, isStarred)
     }
+
+    suspend fun toggleLocked(noteId: Long, isLocked: Boolean) {
+        noteDao.toggleLocked(noteId, isLocked)
+    }
 } 

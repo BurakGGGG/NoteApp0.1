@@ -14,5 +14,6 @@ data class Note(
     val isDeleted: Boolean = false,
     val isStarred: Boolean = false,
     val tag: String? = null,
+    val isLocked: Boolean = false,
     val deletedAt: Date? = null
 ) 
