@@ -1152,6 +1152,8 @@ fun NoteEditScreen(
     var title by remember { mutableStateOf(note?.title ?: "") }
     val richTextState = rememberRichTextState()
     var selectedTag by remember { mutableStateOf(note?.tag) }
+    var isFormatBarOpen by remember { mutableStateOf(false) }
+    var isTagMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(note) {
         if (note != null && richTextState.toHtml() != note.content) {
@@ -1188,6 +1190,39 @@ fun NoteEditScreen(
                         )
                     }
                 },
+                actions = {
+                    androidx.compose.material3.TextButton(onClick = { onSave(title, richTextState.toHtml(), selectedTag) }) {
+                        Text("Kaydet", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+                    }
+                    Box {
+                        IconButton(onClick = { isTagMenuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Etiket Seç")
+                        }
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = isTagMenuExpanded,
+                            onDismissRequest = { isTagMenuExpanded = false },
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                        ) {
+                            predefinedTags.forEach { tag ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(tag)
+                                            if (tag == selectedTag) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedTag = if (selectedTag == tag) null else tag
+                                        isTagMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
@@ -1198,175 +1233,98 @@ fun NoteEditScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(top = paddingValues.calculateTopPadding())
                     .background(MaterialTheme.colorScheme.background)
                     .imePadding()
+                    .navigationBarsPadding()
                     .padding(horizontal = 16.dp)
             ) {
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                // Başlık alanı - üstte sabit kalır
-                OutlinedTextField(
+                Spacer(modifier = Modifier.height(4.dp))
+                if (selectedTag != null) {
+                    Text(
+                        text = "🏷️ $selectedTag",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 0.dp, start = 16.dp)
+                    )
+                }
+
+                // Başlık alanı - Sınırları tamamen kaldırılmış Defter Görünümü
+                androidx.compose.material3.TextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Başlık") },
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    placeholder = { Text("Başlık...", style = MaterialTheme.typography.headlineMedium.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), fontWeight = FontWeight.Bold)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(
-                        onNext = {
-                            keyboardController?.hide()
-                        }
-                    )
+                    keyboardActions = KeyboardActions(onNext = { keyboardController?.hide() })
                 )
                 
-                // Etiket Seçici
+
                 
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(predefinedTags) { tag ->
-                        val isSelected = selectedTag == tag
-                        androidx.compose.material3.FilterChip(
-                            selected = isSelected,
-                            onClick = { 
-                                selectedTag = if (isSelected) null else tag
-                            },
-                            label = { Text(tag) },
-                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Araç Çubuğu (Toolbar)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    androidx.compose.material3.IconButton(
-                        onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) },
-                        modifier = Modifier.background(
-                            if (richTextState.currentSpanStyle.fontWeight == androidx.compose.ui.text.font.FontWeight.Bold) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                    ) {
-                        Text("B", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    androidx.compose.material3.IconButton(
-                        onClick = { richTextState.toggleSpanStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) },
-                        modifier = Modifier.background(
-                            if (richTextState.currentSpanStyle.fontStyle == androidx.compose.ui.text.font.FontStyle.Italic) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                    ) {
-                        Text("I", fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    androidx.compose.material3.IconButton(
-                        onClick = { richTextState.toggleSpanStyle(SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) },
-                        modifier = Modifier.background(
-                            if (richTextState.currentSpanStyle.textDecoration == androidx.compose.ui.text.style.TextDecoration.Underline) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                    ) {
-                        Text("U", textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    androidx.compose.material3.IconButton(
-                        onClick = { richTextState.toggleUnorderedList() },
-                        modifier = Modifier.background(
-                            if (richTextState.isUnorderedList) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                    ) {
-                        Text("•", color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-                
-                // İçerik alanı - RichTextEditor
+                // İçerik alanı - Tam ekran defter hissi, sıfır kenarlık
                 RichTextEditor(
                     state = richTextState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-                        .padding(16.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
+                        .background(Color.Transparent),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                 )
                 
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Butonlar - klavyenin hemen üstünde sabit kalır
+                // Animasyonlu Biçimlendirme Araç Çubuğu (Expandable)
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        border = ButtonDefaults.outlinedButtonBorder.copy(
-                            width = 2.dp
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 0.dp,
-                            pressedElevation = 0.dp
-                        )
-                    ) {
-                        Text(
-                            "Geri Çık",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-                    Button(
-                        onClick = {
-                            onSave(title, richTextState.toHtml(), selectedTag)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 8.dp)
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 4.dp,
-                            pressedElevation = 2.dp
-                        )
-                    ) {
-                        Text(
-                            "Kaydet",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
+                    if (!isFormatBarOpen) {
+                        androidx.compose.material3.Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            onClick = { isFormatBarOpen = true },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("Aa", style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                    } else {
+                        androidx.compose.material3.Surface(
+                            shape = RoundedCornerShape(22.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.animateContentSize()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) }) {
+                                    Text("B", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if(richTextState.currentSpanStyle.fontWeight == androidx.compose.ui.text.font.FontWeight.Bold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) }) {
+                                    Text("I", fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = if(richTextState.currentSpanStyle.fontStyle == androidx.compose.ui.text.font.FontStyle.Italic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) }) {
+                                    Text("U", textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline, color = if(richTextState.currentSpanStyle.textDecoration == androidx.compose.ui.text.style.TextDecoration.Underline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = { richTextState.toggleUnorderedList() }) {
+                                    Text("•", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if(richTextState.isUnorderedList) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)))
+                                IconButton(onClick = { isFormatBarOpen = false }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Kapat", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
                     }
                 }
             }
