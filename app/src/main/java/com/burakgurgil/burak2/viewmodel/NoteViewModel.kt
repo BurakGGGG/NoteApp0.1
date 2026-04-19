@@ -42,8 +42,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun insert(note: Note) = viewModelScope.launch {
-        repository.insert(note)
+    fun insert(note: Note, onInserted: ((Long) -> Unit)? = null) = viewModelScope.launch {
+        val id = repository.insert(note)
+        onInserted?.invoke(id)
     }
 
     fun update(note: Note) = viewModelScope.launch {

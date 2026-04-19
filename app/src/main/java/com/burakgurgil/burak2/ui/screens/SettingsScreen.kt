@@ -30,6 +30,7 @@ fun SettingsScreen(
     onThemeChange: (ThemeType) -> Unit,
     isAutoDeleteEnabled: Boolean,
     onAutoDeleteChange: (Boolean) -> Unit,
+    onExportNotes: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val currentColors = themeColors[currentTheme] ?: themeColors[ThemeType.DEFAULT]!!
@@ -213,6 +214,59 @@ fun SettingsScreen(
                                 checkedTrackColor = MaterialTheme.colorScheme.primary
                             )
                         )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onExportNotes() },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = currentColors.background
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(currentColors.primary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Verileri Dışa Aktar",
+                                tint = currentColors.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Verileri Dışa Aktar",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = currentColors.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Tüm notlarınızı JSON olarak indirin",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = currentColors.textSecondary.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                 }
             }

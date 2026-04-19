@@ -14,6 +14,10 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -75,9 +79,30 @@ import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichText
 import androidx.core.text.HtmlCompat
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.gson.Gson
+import java.io.OutputStreamWriter
 
 class MainActivity : FragmentActivity() {
     private lateinit var viewModel: NoteViewModel
+
+    private val exportNotesLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            try {
+                val notesToExport = viewModel.notes.value
+                val json = Gson().toJson(notesToExport)
+                contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    OutputStreamWriter(outputStream).use { writer ->
+                        writer.write(json)
+                    }
+                }
+                Toast.makeText(this, "Notlar başarıyla dışa aktarıldı", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Dışa aktarma başarısız: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -125,6 +150,9 @@ class MainActivity : FragmentActivity() {
                                 autoDeleteEnabled = it
                                 sharedPreferences.edit().putBoolean("auto_delete", it).apply()
                             },
+                            onExportNotes = {
+                                exportNotesLauncher.launch("notlar_yedek.json")
+                            },
                             onDismiss = { showSettings = false }
                         )
                     } else {
@@ -155,12 +183,19 @@ fun NoteApp(
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedTagFilter by remember { mutableStateOf<String?>(null) }
-    val predefinedTags = listOf("Kişisel", "İş", "Önemli", "Fikir")
+    
+    val context = LocalContext.current
+    val sharedPrefs = context.getSharedPreferences("APP_PREFS", android.content.Context.MODE_PRIVATE)
+    var customTags by remember { 
+        mutableStateOf(sharedPrefs.getStringSet("tags", setOf("Kişisel", "İş", "Önemli", "Fikir"))?.toList() ?: listOf("Kişisel", "İş", "Önemli", "Fikir"))
+    }
+    var isGridView by remember { mutableStateOf(sharedPrefs.getBoolean("is_grid_view", false)) }
+    var showAddTagDialog by remember { mutableStateOf(false) }
+    var newTagText by remember { mutableStateOf("") }
     val notes by viewModel.notes.collectAsState()
     val deletedNotes by viewModel.deletedNotes.collectAsState()
     val currentColors = themeColors[currentTheme] ?: themeColors[ThemeType.DEFAULT]!!
     val density = LocalDensity.current
-    val context = LocalContext.current
     val fragmentActivity = context as FragmentActivity
     
     // Kilitli not için biyometrik doğrulama
@@ -272,15 +307,21 @@ fun NoteApp(
         val note = selectedNoteForEdit!!
         NoteEditScreen(
             note = note,
+            customTags = customTags,
             onDismiss = { selectedNoteForEdit = null },
-            onSave = { title, content, tag ->
-                viewModel.update(
-                    note.copy(
-                        title = title,
-                        content = content,
-                        tag = tag
-                    )
+            onSave = { title, content, tag, rTime ->
+                val updatedNote = note.copy(
+                    title = title,
+                    content = content,
+                    tag = tag,
+                    reminderTime = rTime
                 )
+                viewModel.update(updatedNote)
+                if (rTime != null) {
+                    com.burakgurgil.burak2.receiver.ReminderReceiver.scheduleReminder(context, note.id, title, "Hatırlatıcı", rTime)
+                } else {
+                    com.burakgurgil.burak2.receiver.ReminderReceiver.cancelReminder(context, note.id)
+                }
                 selectedNoteForEdit = null
             }
         )
@@ -291,16 +332,21 @@ fun NoteApp(
     if (showAddDialog) {
         NoteEditScreen(
             note = null,
+            customTags = customTags,
             onDismiss = { showAddDialog = false },
-            onSave = { title, content, tag ->
-                viewModel.insert(
-                    Note(
-                        title = title,
-                        content = content,
-                        tag = tag,
-                        createdAt = Date()
-                    )
+            onSave = { title, content, tag, rTime ->
+                val newNote = Note(
+                    title = title,
+                    content = content,
+                    tag = tag,
+                    reminderTime = rTime,
+                    createdAt = Date()
                 )
+                viewModel.insert(newNote) { newId ->
+                    if (rTime != null) {
+                        com.burakgurgil.burak2.receiver.ReminderReceiver.scheduleReminder(context, newId, title, "Hatırlatıcı", rTime)
+                    }
+                }
                 showAddDialog = false
             }
         )
@@ -423,6 +469,35 @@ fun NoteApp(
                                         defaultElevation = 2.dp,
                                         pressedElevation = 1.dp
                                     ),
+                                    onClick = { 
+                                        isGridView = !isGridView 
+                                        sharedPrefs.edit().putBoolean("is_grid_view", isGridView).apply()
+                                    }
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            if (isGridView) Icons.Default.List else Icons.Default.Menu,
+                                            contentDescription = "Görünümü Değiştir",
+                                            tint = currentColors.textPrimary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                                Card(
+                                    modifier = Modifier
+                                        .padding(end = 8.dp)
+                                        .size(48.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = currentColors.settingsButton
+                                    ),
+                                    elevation = CardDefaults.cardElevation(
+                                        defaultElevation = 2.dp,
+                                        pressedElevation = 1.dp
+                                    ),
                                     onClick = onSettingsClick
                                 ) {
                                     Box(
@@ -465,11 +540,34 @@ fun NoteApp(
                                 )
                             )
                         }
-                        items(predefinedTags) { tag ->
+                        item {
+                            FilterChip(
+                                selected = false,
+                                onClick = { showAddTagDialog = true },
+                                label = { Text("+ Yeni") },
+                                colors = FilterChipDefaults.filterChipColors()
+                            )
+                        }
+                        items(customTags) { tag ->
+                            val isDefault = setOf("Kişisel", "İş", "Önemli", "Fikir").contains(tag)
                             FilterChip(
                                 selected = selectedTagFilter == tag,
                                 onClick = { selectedTagFilter = tag },
                                 label = { Text(tag) },
+                                trailingIcon = if (!isDefault) {
+                                    {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Sil",
+                                            modifier = Modifier.size(16.dp).clickable {
+                                                val updatedTags = customTags - tag
+                                                customTags = updatedTags
+                                                sharedPrefs.edit().putStringSet("tags", updatedTags.toSet()).apply()
+                                                if (selectedTagFilter == tag) selectedTagFilter = null
+                                            }
+                                        )
+                                    }
+                                } else null,
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -650,15 +748,67 @@ fun NoteApp(
                         }
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(
-                            items = notesOrder,
-                            key = { it.id }
-                        ) { note ->
+                    if (isGridView) {
+                        LazyVerticalStaggeredGrid(
+                            columns = StaggeredGridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalItemSpacing = 12.dp
+                        ) {
+                            items(
+                                items = notesOrder,
+                                key = { it.id }
+                            ) { note ->
+                                val isDragging = draggedNote?.id == note.id
+                                var dragOffset by remember { mutableStateOf(0f) }
+                                
+                                NoteItem(
+                                    note = note,
+                                    onView = { 
+                                        if (draggedNote == null) {
+                                            authenticateAndPerform(note, "view")
+                                        }
+                                    },
+                                    onEdit = { 
+                                        if (draggedNote == null) {
+                                            authenticateAndPerform(note, "edit")
+                                        }
+                                    },
+                                    onDelete = { viewModel.moveToTrash(note.id) },
+                                    onStarred = { 
+                                        if (!note.isStarred && starredCount >= 3) {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("Maksimum 3 yıldızlı not olabilir", duration = SnackbarDuration.Short)
+                                            }
+                                        } else {
+                                            recentlyStarredNoteId = note.id
+                                            viewModel.toggleStarred(note.id, !note.isStarred)
+                                        }
+                                    },
+                                    onLockToggle = {
+                                        if (note.isLocked) {
+                                            authenticateAndPerform(note, "unlock")
+                                        } else {
+                                            viewModel.toggleLocked(note.id, true)
+                                        }
+                                    },
+                                    currentTheme = currentTheme,
+                                    isRecentlyStarred = recentlyStarredNoteId == note.id,
+                                    modifier = Modifier
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(
+                                items = notesOrder,
+                                key = { it.id }
+                            ) { note ->
                             val isDragging = draggedNote?.id == note.id
                             var dragOffset by remember { mutableStateOf(0f) }
                             
@@ -751,8 +901,45 @@ fun NoteApp(
                             )
                         }
                     }
+                    }
                 }
             }
+        }
+
+        if (showAddTagDialog) {
+            AlertDialog(
+                onDismissRequest = { showAddTagDialog = false },
+                title = { Text("Yeni Etiket Ekle") },
+                text = {
+                    TextField(
+                        value = newTagText,
+                        onValueChange = { newTagText = it },
+                        singleLine = true,
+                        placeholder = { Text("Etiket Adı") }
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (newTagText.isNotBlank() && !customTags.contains(newTagText.trim())) {
+                            val updatedTags = customTags + newTagText.trim()
+                            customTags = updatedTags
+                            sharedPrefs.edit().putStringSet("tags", updatedTags.toSet()).apply()
+                        }
+                        newTagText = ""
+                        showAddTagDialog = false
+                    }) {
+                        Text("Ekle")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { 
+                        newTagText = ""
+                        showAddTagDialog = false 
+                    }) {
+                        Text("İptal")
+                    }
+                }
+            )
         }
 
         if (showDeleteAllConfirmation) {
@@ -915,6 +1102,14 @@ fun NoteItem(
                         Icon(
                             Icons.Default.Lock,
                             contentDescription = "Kilitli",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    if (note.reminderTime != null) {
+                        Icon(
+                            androidx.compose.material.icons.Icons.Default.Notifications,
+                            contentDescription = "Hatırlatıcı Var",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -1146,14 +1341,43 @@ fun NoteItem(
 @Composable
 fun NoteEditScreen(
     note: Note?,
+    customTags: List<String>,
     onDismiss: () -> Unit,
-    onSave: (String, String, String?) -> Unit
+    onSave: (String, String, String?, Long?) -> Unit
 ) {
     var title by remember { mutableStateOf(note?.title ?: "") }
     val richTextState = rememberRichTextState()
     var selectedTag by remember { mutableStateOf(note?.tag) }
+    var reminderTime by remember { mutableStateOf(note?.reminderTime) }
     var isFormatBarOpen by remember { mutableStateOf(false) }
     var isTagMenuExpanded by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val calendar = remember { java.util.Calendar.getInstance() }
+    val timePickerDialog = android.app.TimePickerDialog(
+        context,
+        { _, hourOfDay, minute ->
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, hourOfDay)
+            calendar.set(java.util.Calendar.MINUTE, minute)
+            calendar.set(java.util.Calendar.SECOND, 0)
+            reminderTime = calendar.timeInMillis
+        },
+        calendar.get(java.util.Calendar.HOUR_OF_DAY),
+        calendar.get(java.util.Calendar.MINUTE),
+        true
+    )
+    val datePickerDialog = android.app.DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            calendar.set(java.util.Calendar.YEAR, year)
+            calendar.set(java.util.Calendar.MONTH, month)
+            calendar.set(java.util.Calendar.DAY_OF_MONTH, dayOfMonth)
+            timePickerDialog.show()
+        },
+        calendar.get(java.util.Calendar.YEAR),
+        calendar.get(java.util.Calendar.MONTH),
+        calendar.get(java.util.Calendar.DAY_OF_MONTH)
+    )
 
     LaunchedEffect(note) {
         if (note != null && richTextState.toHtml() != note.content) {
@@ -1163,7 +1387,7 @@ fun NoteEditScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val isEditMode = note != null
 
-    val predefinedTags = listOf("Kişisel", "İş", "Önemli", "Fikir")
+    // removed predefinedTags
 
     // Geri tuşu yönetimi
     BackHandler {
@@ -1191,7 +1415,14 @@ fun NoteEditScreen(
                     }
                 },
                 actions = {
-                    androidx.compose.material3.TextButton(onClick = { onSave(title, richTextState.toHtml(), selectedTag) }) {
+                    IconButton(onClick = { datePickerDialog.show() }) {
+                        Icon(
+                            androidx.compose.material.icons.Icons.Default.Notifications,
+                            contentDescription = "Hatırlatıcı",
+                            tint = if (reminderTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    androidx.compose.material3.TextButton(onClick = { onSave(title, richTextState.toHtml(), selectedTag, reminderTime) }) {
                         Text("Kaydet", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
                     }
                     Box {
@@ -1203,7 +1434,7 @@ fun NoteEditScreen(
                             onDismissRequest = { isTagMenuExpanded = false },
                             modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                         ) {
-                            predefinedTags.forEach { tag ->
+                            customTags.forEach { tag ->
                                 androidx.compose.material3.DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1240,13 +1471,24 @@ fun NoteEditScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 Spacer(modifier = Modifier.height(4.dp))
-                if (selectedTag != null) {
-                    Text(
-                        text = "🏷️ $selectedTag",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 0.dp, start = 16.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (selectedTag != null) {
+                        Text(
+                            text = "🏷️ $selectedTag",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 0.dp, start = 16.dp, end = 8.dp)
+                        )
+                    }
+                    if (reminderTime != null) {
+                        val formatter = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                        Text(
+                            text = "⏰ ${formatter.format(java.util.Date(reminderTime!!))}",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 0.dp, start = if (selectedTag == null) 16.dp else 0.dp)
+                        )
+                    }
                 }
 
                 // Başlık alanı - Sınırları tamamen kaldırılmış Defter Görünümü

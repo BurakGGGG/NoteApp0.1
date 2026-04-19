@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
@@ -25,6 +26,7 @@ import com.burakgurgil.burak2.data.Note
 import com.burakgurgil.burak2.ui.icons.CustomIcons
 import java.text.SimpleDateFormat
 import java.util.*
+import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
@@ -41,6 +43,7 @@ fun ViewNoteScreen(
     // rememberSaveable kullanarak durumu kaydet
     var searchText by rememberSaveable { mutableStateOf("") }
     var currentMatchIndex by rememberSaveable { mutableStateOf(-1) }
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val density = LocalDensity.current
@@ -125,6 +128,28 @@ fun ViewNoteScreen(
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = {
+                                val sendIntent = Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TITLE, note.title)
+                                    putExtra(Intent.EXTRA_TEXT, "${note.title}\n\n${richTextState.annotatedString.text}")
+                                    type = "text/plain"
+                                }
+                                val shareIntent = Intent.createChooser(sendIntent, "Notu Paylaş")
+                                context.startActivity(shareIntent)
+                            },
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Paylaş",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                         Button(
                             onClick = onEdit,
                             modifier = Modifier

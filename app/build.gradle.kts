@@ -83,6 +83,9 @@ dependencies {
     // Rich Text Editor
     implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc08")
     
+    // Gson for JSON Export
+    implementation("com.google.code.gson:gson:2.10.1")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
