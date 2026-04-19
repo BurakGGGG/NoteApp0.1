@@ -111,6 +111,10 @@ fun ViewNoteScreen(
                     .background(MaterialTheme.colorScheme.surface)
             ) {
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent
+                    ),
                     title = {},
                     navigationIcon = {
                         IconButton(
@@ -155,7 +159,7 @@ fun ViewNoteScreen(
                             modifier = Modifier
                                 .padding(end = 16.dp)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary

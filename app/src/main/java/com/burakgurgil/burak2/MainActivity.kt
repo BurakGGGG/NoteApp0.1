@@ -357,6 +357,10 @@ fun NoteApp(
         topBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent
+                    ),
                     title = { 
                         if (isSearchActive) {
                             TextField(
@@ -514,11 +518,7 @@ fun NoteApp(
                                 }
                             }
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface
-                    )
+                    }
                 )
 
                 // Etiket filtreleri
@@ -587,12 +587,13 @@ fun NoteApp(
                     onClick = { showAddDialog = true },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier
                         .size(64.dp),
                     elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 4.dp
+                        defaultElevation = 8.dp,
+                        pressedElevation = 4.dp,
+                        hoveredElevation = 10.dp
                     )
                 ) {
                     Icon(
@@ -731,6 +732,13 @@ fun NoteApp(
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.padding(32.dp)
                         ) {
+                            Icon(
+                                CustomIcons.NewNote,
+                                contentDescription = null,
+                                modifier = Modifier.size(80.dp).alpha(0.2f),
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
                             Text(
                                 "Henüz not eklenmemiş",
                                 style = MaterialTheme.typography.headlineSmall.copy(
@@ -1044,19 +1052,19 @@ fun NoteItem(
                 scaleY = starScale
             }
             .animateContentSize(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isRecentlyStarred && note.isStarred) 8.dp else 0.dp
+            defaultElevation = if (isRecentlyStarred && note.isStarred) 12.dp else 2.dp
         ),
         colors = CardDefaults.cardColors(
-            containerColor = if (currentTheme == ThemeType.DEFAULT) Color(0xFFF5F5F5) else MaterialTheme.colorScheme.surface
+            containerColor = currentColors.surface
         ),
         onClick = onView
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
