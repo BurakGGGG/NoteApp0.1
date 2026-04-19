@@ -1,5 +1,8 @@
 package com.burakgurgil.burak2
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
@@ -11,21 +14,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,15 +52,12 @@ import java.util.*
 import androidx.compose.foundation.layout.imePadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 
-import androidx.compose.ui.platform.LocalFocusManager
 import kotlinx.coroutines.delay
 
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,19 +66,22 @@ import kotlinx.coroutines.launch
 import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.border
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
-import com.mohamedrejeb.richeditor.ui.material3.RichText
 import androidx.core.text.HtmlCompat
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import com.burakgurgil.burak2.receiver.ReminderReceiver
 import com.google.gson.Gson
 import java.io.OutputStreamWriter
+import kotlin.math.abs
 
 class MainActivity : FragmentActivity() {
     private lateinit var viewModel: NoteViewModel
@@ -207,7 +204,7 @@ fun NoteApp(
     var selectedTagFilter by remember { mutableStateOf<String?>(null) }
     
     val context = LocalContext.current
-    val sharedPrefs = context.getSharedPreferences("APP_PREFS", android.content.Context.MODE_PRIVATE)
+    val sharedPrefs = context.getSharedPreferences("APP_PREFS", Context.MODE_PRIVATE)
     var customTags by remember { 
         mutableStateOf(sharedPrefs.getStringSet("tags", setOf("Kişisel", "İş", "Önemli", "Fikir"))?.toList() ?: listOf("Kişisel", "İş", "Önemli", "Fikir"))
     }
@@ -343,9 +340,9 @@ fun NoteApp(
                 )
                 viewModel.update(updatedNote)
                 if (rTime != null) {
-                    com.burakgurgil.burak2.receiver.ReminderReceiver.scheduleReminder(context, note.id, title, "Hatırlatıcı", rTime)
+                    ReminderReceiver.scheduleReminder(context, note.id, title, "Hatırlatıcı", rTime)
                 } else {
-                    com.burakgurgil.burak2.receiver.ReminderReceiver.cancelReminder(context, note.id)
+                    ReminderReceiver.cancelReminder(context, note.id)
                 }
                 selectedNoteForEdit = null
             }
@@ -369,7 +366,7 @@ fun NoteApp(
                 )
                 viewModel.insert(newNote) { newId ->
                     if (rTime != null) {
-                        com.burakgurgil.burak2.receiver.ReminderReceiver.scheduleReminder(context, newId, title, "Hatırlatıcı", rTime)
+                        ReminderReceiver.scheduleReminder(context, newId, title, "Hatırlatıcı", rTime)
                     }
                 }
                 showAddDialog = false
@@ -504,6 +501,7 @@ fun NoteApp(
                                         defaultElevation = 2.dp,
                                         pressedElevation = 1.dp
                                     ),
+                                    onClick = { 
                                         isGridView = !isGridView 
                                         sharedPrefs.edit().putBoolean("is_grid_view", isGridView).apply()
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -875,7 +873,8 @@ fun NoteApp(
                                     currentTheme = currentTheme,
                                     isRecentlyStarred = recentlyStarredNoteId == note.id,
                                     modifier = Modifier
-                                )
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -971,7 +970,7 @@ fun NoteApp(
                                                 val currentIndex = notesOrder.indexOf(note)
                                                 val threshold = with(density) { 60.dp.toPx() } // Minimum hareket mesafesi
                                                 
-                                                if (kotlin.math.abs(dragOffset) > threshold) {
+                                                if (abs(dragOffset) > threshold) {
                                                     val newIndex = if (dragOffset > 0) {
                                                         // Aşağı sürükleniyor
                                                         (currentIndex + 1).coerceAtMost(notesOrder.size - 1)
@@ -1107,11 +1106,11 @@ fun NoteApp(
                 }
             )
         }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-@Composable
 @Composable
 fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
     val direction = dismissState.dismissDirection ?: return
@@ -1154,6 +1153,7 @@ fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
     }
 }
 
+@Composable
 fun NoteItem(
     note: Note,
     onView: () -> Unit,
@@ -1162,9 +1162,8 @@ fun NoteItem(
     onStarred: () -> Unit,
     onLockToggle: () -> Unit,
     currentTheme: ThemeType,
-    modifier: Modifier = Modifier,
-    isRecentlyStarred: Boolean = false
-    isRecentlyStarred: Boolean = false
+    isRecentlyStarred: Boolean = false,
+    modifier: Modifier
 ) {
     val haptic = LocalHapticFeedback.current
     var showDeleteConfirmation by remember { mutableStateOf(false) }
@@ -1259,7 +1258,7 @@ fun NoteItem(
                     }
                     if (note.reminderTime != null) {
                         Icon(
-                            androidx.compose.material.icons.Icons.Default.Notifications,
+                            Icons.Default.Notifications,
                             contentDescription = "Hatırlatıcı Var",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
@@ -1391,7 +1390,7 @@ fun NoteItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     maxLines = 3,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -1507,30 +1506,30 @@ fun NoteEditScreen(
     var isTagMenuExpanded by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val calendar = remember { java.util.Calendar.getInstance() }
-    val timePickerDialog = android.app.TimePickerDialog(
+    val calendar = remember { Calendar.getInstance() }
+    val timePickerDialog = TimePickerDialog(
         context,
         { _, hourOfDay, minute ->
-            calendar.set(java.util.Calendar.HOUR_OF_DAY, hourOfDay)
-            calendar.set(java.util.Calendar.MINUTE, minute)
-            calendar.set(java.util.Calendar.SECOND, 0)
+            calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+            calendar.set(Calendar.MINUTE, minute)
+            calendar.set(Calendar.SECOND, 0)
             reminderTime = calendar.timeInMillis
         },
-        calendar.get(java.util.Calendar.HOUR_OF_DAY),
-        calendar.get(java.util.Calendar.MINUTE),
+        calendar.get(Calendar.HOUR_OF_DAY),
+        calendar.get(Calendar.MINUTE),
         true
     )
-    val datePickerDialog = android.app.DatePickerDialog(
+    val datePickerDialog = DatePickerDialog(
         context,
         { _, year, month, dayOfMonth ->
-            calendar.set(java.util.Calendar.YEAR, year)
-            calendar.set(java.util.Calendar.MONTH, month)
-            calendar.set(java.util.Calendar.DAY_OF_MONTH, dayOfMonth)
+            calendar.set(Calendar.YEAR, year)
+            calendar.set(Calendar.MONTH, month)
+            calendar.set(Calendar.DAY_OF_MONTH, dayOfMonth)
             timePickerDialog.show()
         },
-        calendar.get(java.util.Calendar.YEAR),
-        calendar.get(java.util.Calendar.MONTH),
-        calendar.get(java.util.Calendar.DAY_OF_MONTH)
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
     )
 
     LaunchedEffect(note) {
@@ -1571,25 +1570,25 @@ fun NoteEditScreen(
                 actions = {
                     IconButton(onClick = { datePickerDialog.show() }) {
                         Icon(
-                            androidx.compose.material.icons.Icons.Default.Notifications,
+                            Icons.Default.Notifications,
                             contentDescription = "Hatırlatıcı",
                             tint = if (reminderTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    androidx.compose.material3.TextButton(onClick = { onSave(title, richTextState.toHtml(), selectedTag, reminderTime) }) {
+                    TextButton(onClick = { onSave(title, richTextState.toHtml(), selectedTag, reminderTime) }) {
                         Text("Kaydet", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
                     }
                     Box {
                         IconButton(onClick = { isTagMenuExpanded = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "Etiket Seç")
                         }
-                        androidx.compose.material3.DropdownMenu(
+                        DropdownMenu(
                             expanded = isTagMenuExpanded,
                             onDismissRequest = { isTagMenuExpanded = false },
                             modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                         ) {
                             customTags.forEach { tag ->
-                                androidx.compose.material3.DropdownMenuItem(
+                                DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(tag)
@@ -1635,9 +1634,9 @@ fun NoteEditScreen(
                         )
                     }
                     if (reminderTime != null) {
-                        val formatter = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                        val formatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
                         Text(
-                            text = "⏰ ${formatter.format(java.util.Date(reminderTime!!))}",
+                            text = "⏰ ${formatter.format(Date(reminderTime!!))}",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = 0.dp, start = if (selectedTag == null) 16.dp else 0.dp)
@@ -1646,14 +1645,14 @@ fun NoteEditScreen(
                 }
 
                 // Başlık alanı - Sınırları tamamen kaldırılmış Defter Görünümü
-                androidx.compose.material3.TextField(
+                TextField(
                     value = title,
                     onValueChange = { title = it },
                     placeholder = { Text("Başlık...", style = MaterialTheme.typography.headlineMedium.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), fontWeight = FontWeight.Bold)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = false,
                     textStyle = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                    colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
                         focusedIndicatorColor = Color.Transparent,
@@ -1683,18 +1682,18 @@ fun NoteEditScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (!isFormatBarOpen) {
-                        androidx.compose.material3.Surface(
-                            shape = androidx.compose.foundation.shape.CircleShape,
+                        Surface(
+                            shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
                             onClick = { isFormatBarOpen = true },
                             modifier = Modifier.size(44.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text("Aa", style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text("Aa", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                         }
                     } else {
-                        androidx.compose.material3.Surface(
+                        Surface(
                             shape = RoundedCornerShape(22.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.animateContentSize()
@@ -1703,17 +1702,17 @@ fun NoteEditScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                             ) {
-                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) }) {
-                                    Text("B", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if(richTextState.currentSpanStyle.fontWeight == androidx.compose.ui.text.font.FontWeight.Bold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) }) {
+                                    Text("B", fontWeight = FontWeight.Bold, color = if(richTextState.currentSpanStyle.fontWeight == FontWeight.Bold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) }) {
-                                    Text("I", fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = if(richTextState.currentSpanStyle.fontStyle == androidx.compose.ui.text.font.FontStyle.Italic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) }) {
+                                    Text("I", fontStyle = FontStyle.Italic, color = if(richTextState.currentSpanStyle.fontStyle == FontStyle.Italic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) }) {
-                                    Text("U", textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline, color = if(richTextState.currentSpanStyle.textDecoration == androidx.compose.ui.text.style.TextDecoration.Underline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                IconButton(onClick = { richTextState.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline)) }) {
+                                    Text("U", textDecoration = TextDecoration.Underline, color = if(richTextState.currentSpanStyle.textDecoration == TextDecoration.Underline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 IconButton(onClick = { richTextState.toggleUnorderedList() }) {
-                                    Text("•", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if(richTextState.isUnorderedList) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("•", fontWeight = FontWeight.Bold, color = if(richTextState.isUnorderedList) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)))
                                 IconButton(onClick = { isFormatBarOpen = false }) {
@@ -1766,7 +1765,7 @@ fun DeletedNoteItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = currentColors.textPrimary.copy(alpha = 0.7f),
                     maxLines = 2,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
