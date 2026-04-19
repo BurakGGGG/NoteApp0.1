@@ -15,6 +15,7 @@ data class Note(
     val isStarred: Boolean = false,
     val tag: String? = null,
     val isLocked: Boolean = false,
+    val isArchived: Boolean = false,
     val deletedAt: Date? = null,
     val reminderTime: Long? = null
 ) 

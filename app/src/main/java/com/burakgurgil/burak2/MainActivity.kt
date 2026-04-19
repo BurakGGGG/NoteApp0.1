@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.ViewModelProvider
 import com.burakgurgil.burak2.data.Note
 import com.burakgurgil.burak2.ui.screens.SettingsScreen
@@ -120,16 +122,31 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             var currentTheme by remember {
-                mutableStateOf(
-                    ThemeType.valueOf(
-                        sharedPreferences.getString("theme", ThemeType.DEFAULT.name) ?: ThemeType.DEFAULT.name
-                    )
-                )
+                val savedTheme = sharedPreferences.getString("theme", ThemeType.DEFAULT.name) ?: ThemeType.DEFAULT.name
+                val theme = try {
+                    ThemeType.valueOf(savedTheme)
+                } catch (e: Exception) {
+                    // Migration logic
+                    when (savedTheme) {
+                        "PASTEL" -> ThemeType.PAPER
+                        "SPRING" -> ThemeType.FOREST
+                        "SUMMER", "AUTUMN" -> ThemeType.SUNSET
+                        "WINTER" -> ThemeType.MIDNIGHT
+                        else -> ThemeType.DEFAULT
+                    }
+                }
+                mutableStateOf(theme)
             }
             var autoDeleteEnabled by remember { mutableStateOf(isAutoDeleteEnabled) }
+            var useDynamicColor by remember { 
+                mutableStateOf(sharedPreferences.getBoolean("dynamic_color", false))
+            }
             var showSettings by remember { mutableStateOf(false) }
 
-            Burak2Theme(themeType = currentTheme) {
+            Burak2Theme(
+                themeType = currentTheme,
+                useDynamicColor = useDynamicColor
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -149,6 +166,11 @@ class MainActivity : FragmentActivity() {
                             onAutoDeleteChange = {
                                 autoDeleteEnabled = it
                                 sharedPreferences.edit().putBoolean("auto_delete", it).apply()
+                            },
+                            useDynamicColor = useDynamicColor,
+                            onDynamicColorChange = {
+                                useDynamicColor = it
+                                sharedPreferences.edit().putBoolean("dynamic_color", it).apply()
                             },
                             onExportNotes = {
                                 exportNotesLauncher.launch("notlar_yedek.json")
@@ -194,6 +216,8 @@ fun NoteApp(
     var newTagText by remember { mutableStateOf("") }
     val notes by viewModel.notes.collectAsState()
     val deletedNotes by viewModel.deletedNotes.collectAsState()
+    val archivedNotes by viewModel.archivedNotes.collectAsState()
+    val haptic = LocalHapticFeedback.current
     val currentColors = themeColors[currentTheme] ?: themeColors[ThemeType.DEFAULT]!!
     val density = LocalDensity.current
     val fragmentActivity = context as FragmentActivity
@@ -247,14 +271,15 @@ fun NoteApp(
     var recentlyStarredNoteId by remember { mutableStateOf<Long?>(null) }
     
     // Notlar değiştiğinde veya filtreler değiştiğinde sıralamayı güncelle
-    LaunchedEffect(notes, searchQuery, selectedTagFilter) {
+    LaunchedEffect(notes, archivedNotes, searchQuery, selectedTagFilter) {
         if (draggedNote == null) {
-            val filtered = notes.filter { note ->
+            val baseList = if (selectedTagFilter == "ARCHIVED") archivedNotes else notes
+            val filtered = baseList.filter { note ->
                 val matchesSearch = if (searchQuery.isBlank()) true else {
                     note.title.contains(searchQuery, ignoreCase = true) || 
                     note.content.contains(searchQuery, ignoreCase = true)
                 }
-                val matchesTag = if (selectedTagFilter == null) true else {
+                val matchesTag = if (selectedTagFilter == null || selectedTagFilter == "ARCHIVED") true else {
                     note.tag == selectedTagFilter
                 }
                 matchesSearch && matchesTag
@@ -407,7 +432,10 @@ fun NoteApp(
                                         defaultElevation = 2.dp,
                                         pressedElevation = 1.dp
                                     ),
-                                    onClick = { isSearchActive = true }
+                                    onClick = { 
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isSearchActive = true 
+                                    }
                                 ) {
                                     Box(
                                         modifier = Modifier.fillMaxSize(),
@@ -447,7 +475,10 @@ fun NoteApp(
                                         defaultElevation = 2.dp,
                                         pressedElevation = 1.dp
                                     ),
-                                    onClick = { showTrash = true }
+                                    onClick = { 
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        showTrash = true 
+                                    }
                                 ) {
                                     Box(
                                         modifier = Modifier.fillMaxSize(),
@@ -473,9 +504,9 @@ fun NoteApp(
                                         defaultElevation = 2.dp,
                                         pressedElevation = 1.dp
                                     ),
-                                    onClick = { 
                                         isGridView = !isGridView 
                                         sharedPrefs.edit().putBoolean("is_grid_view", isGridView).apply()
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
                                 ) {
                                     Box(
@@ -502,7 +533,10 @@ fun NoteApp(
                                         defaultElevation = 2.dp,
                                         pressedElevation = 1.dp
                                     ),
-                                    onClick = onSettingsClick
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onSettingsClick()
+                                    }
                                 ) {
                                     Box(
                                         modifier = Modifier.fillMaxSize(),
@@ -537,6 +571,17 @@ fun NoteApp(
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = selectedTagFilter == "ARCHIVED",
+                                onClick = { selectedTagFilter = "ARCHIVED" },
+                                label = { Text("Arşiv") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             )
                         }
@@ -584,7 +629,10 @@ fun NoteApp(
         floatingActionButton = {
             if (!showTrash) {
                 FloatingActionButton(
-                    onClick = { showAddDialog = true },
+                    onClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showAddDialog = true 
+                    },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     shape = RoundedCornerShape(24.dp),
@@ -768,7 +816,30 @@ fun NoteApp(
                                 items = notesOrder,
                                 key = { it.id }
                             ) { note ->
-                                val isDragging = draggedNote?.id == note.id
+                                val dismissState = rememberSwipeToDismissBoxState(
+                                    confirmValueChange = { value ->
+                                        when (value) {
+                                            SwipeToDismissBoxValue.EndToStart -> {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                viewModel.moveToTrash(note.id)
+                                                true
+                                            }
+                                            SwipeToDismissBoxValue.StartToEnd -> {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                viewModel.toggleArchived(note.id, true)
+                                                true
+                                            }
+                                            else -> false
+                                        }
+                                    }
+                                )
+
+                                SwipeToDismissBox(
+                                    state = dismissState,
+                                    backgroundContent = { SwipeBackground(dismissState) },
+                                    modifier = Modifier.animateItemPlacement()
+                                ) {
+                                    val isDragging = draggedNote?.id == note.id
                                 var dragOffset by remember { mutableStateOf(0f) }
                                 
                                 NoteItem(
@@ -817,59 +888,81 @@ fun NoteApp(
                                 items = notesOrder,
                                 key = { it.id }
                             ) { note ->
-                            val isDragging = draggedNote?.id == note.id
-                            var dragOffset by remember { mutableStateOf(0f) }
-                            
-                            NoteItem(
-                                note = note,
-                                onView = { 
-                                    if (draggedNote == null) {
-                                        authenticateAndPerform(note, "view")
-                                    }
-                                },
-                                onEdit = { 
-                                    if (draggedNote == null) {
-                                        authenticateAndPerform(note, "edit")
-                                    }
-                                },
-                                onDelete = { viewModel.moveToTrash(note.id) },
-                                onStarred = { 
-                                    if (!note.isStarred && starredCount >= 3) {
-                                        // Maksimum 3 yıldızlı not limiti
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                message = "Maksimum 3 yıldızlı not olabilir",
-                                                duration = SnackbarDuration.Short
-                                            )
+                                val dismissState = rememberSwipeToDismissBoxState(
+                                    confirmValueChange = { value ->
+                                        when (value) {
+                                            SwipeToDismissBoxValue.EndToStart -> {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                viewModel.moveToTrash(note.id)
+                                                true
+                                            }
+                                            SwipeToDismissBoxValue.StartToEnd -> {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                viewModel.toggleArchived(note.id, !note.isArchived)
+                                                true
+                                            }
+                                            else -> false
                                         }
-                                    } else {
-                                        recentlyStarredNoteId = note.id
-                                        viewModel.toggleStarred(note.id, !note.isStarred)
                                     }
-                                },
-                                onLockToggle = {
-                                    if (note.isLocked) {
-                                        authenticateAndPerform(note, "unlock")
-                                    } else {
-                                        viewModel.toggleLocked(note.id, true)
-                                    }
-                                },
-                                currentTheme = currentTheme,
-                                isRecentlyStarred = recentlyStarredNoteId == note.id,
-                                modifier = Modifier
-                                    .graphicsLayer {
-                                        translationY = if (isDragging) dragOffset else 0f
-                                        alpha = if (isDragging) 0.85f else 1f
-                                        scaleX = if (isDragging) 1.03f else 1f
-                                        scaleY = if (isDragging) 1.03f else 1f
-                                        shadowElevation = if (isDragging) 8f else 0f
-                                    }
-                                    .pointerInput(note.id) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = {
-                                                draggedNote = note
-                                                dragOffset = 0f
-                                            },
+                                )
+
+                                SwipeToDismissBox(
+                                    state = dismissState,
+                                    backgroundContent = { SwipeBackground(dismissState) },
+                                    modifier = Modifier.animateItemPlacement()
+                                ) {
+                                    val isDragging = draggedNote?.id == note.id
+                                    var dragOffset by remember { mutableStateOf(0f) }
+                                    
+                                    NoteItem(
+                                        note = note,
+                                        onView = { 
+                                            if (draggedNote == null) {
+                                                authenticateAndPerform(note, "view")
+                                            }
+                                        },
+                                        onEdit = { 
+                                            if (draggedNote == null) {
+                                                authenticateAndPerform(note, "edit")
+                                            }
+                                        },
+                                        onDelete = { viewModel.moveToTrash(note.id) },
+                                        onStarred = { 
+                                            if (!note.isStarred && starredCount >= 3) {
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = "Maksimum 3 yıldızlı not olabilir",
+                                                        duration = SnackbarDuration.Short
+                                                    )
+                                                }
+                                            } else {
+                                                recentlyStarredNoteId = note.id
+                                                viewModel.toggleStarred(note.id, !note.isStarred)
+                                            }
+                                        },
+                                        onLockToggle = {
+                                            if (note.isLocked) {
+                                                authenticateAndPerform(note, "unlock")
+                                            } else {
+                                                viewModel.toggleLocked(note.id, true)
+                                            }
+                                        },
+                                        currentTheme = currentTheme,
+                                        isRecentlyStarred = recentlyStarredNoteId == note.id,
+                                        modifier = Modifier
+                                            .graphicsLayer {
+                                                translationY = if (isDragging) dragOffset else 0f
+                                                alpha = if (isDragging) 0.85f else 1f
+                                                scaleX = if (isDragging) 1.03f else 1f
+                                                scaleY = if (isDragging) 1.03f else 1f
+                                                shadowElevation = if (isDragging) 8f else 0f
+                                            }
+                                            .pointerInput(note.id) {
+                                                detectDragGesturesAfterLongPress(
+                                                    onDragStart = {
+                                                        draggedNote = note
+                                                        dragOffset = 0f
+                                                    },
                                             onDrag = { change, dragAmount ->
                                                 change.consume()
                                                 dragOffset += dragAmount.y
@@ -1019,6 +1112,48 @@ fun NoteApp(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
+@Composable
+fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
+    val direction = dismissState.dismissDirection ?: return
+    val color = when (direction) {
+        SwipeToDismissBoxValue.StartToEnd -> Color(0xFF4CAF50) // Yeşil (Arşiv)
+        SwipeToDismissBoxValue.EndToStart -> Color(0xFFF44336) // Kırmızı (Sil)
+        else -> Color.Transparent
+    }
+    
+    val alignment = when (direction) {
+        SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+        SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+        else -> Alignment.Center
+    }
+    
+    val icon = when (direction) {
+        SwipeToDismissBoxValue.StartToEnd -> Icons.Default.Done
+        SwipeToDismissBoxValue.EndToStart -> Icons.Default.Delete
+        else -> Icons.Default.Delete
+    }
+    
+    val scale by animateFloatAsState(
+        if (dismissState.targetValue == SwipeToDismissBoxValue.Settled) 0.75f else 1f
+    )
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(24.dp))
+            .background(color)
+            .padding(horizontal = 20.dp),
+        contentAlignment = alignment
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale),
+            tint = Color.White
+        )
+    }
+}
+
 fun NoteItem(
     note: Note,
     onView: () -> Unit,
@@ -1029,7 +1164,9 @@ fun NoteItem(
     currentTheme: ThemeType,
     modifier: Modifier = Modifier,
     isRecentlyStarred: Boolean = false
+    isRecentlyStarred: Boolean = false
 ) {
+    val haptic = LocalHapticFeedback.current
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     val currentColors = themeColors[currentTheme] ?: themeColors[ThemeType.DEFAULT]!!
@@ -1059,7 +1196,10 @@ fun NoteItem(
         colors = CardDefaults.cardColors(
             containerColor = currentColors.surface
         ),
-        onClick = onView
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onView()
+        }
     ) {
         Column(
             modifier = Modifier
@@ -1085,7 +1225,10 @@ fun NoteItem(
                         elevation = CardDefaults.cardElevation(
                             defaultElevation = 0.dp
                         ),
-                        onClick = onStarred
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onStarred()
+                        }
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -1136,7 +1279,10 @@ fun NoteItem(
                             defaultElevation = 2.dp,
                             pressedElevation = 1.dp
                         ),
-                        onClick = { showMenu = true }
+                        onClick = { 
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showMenu = true 
+                        }
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),

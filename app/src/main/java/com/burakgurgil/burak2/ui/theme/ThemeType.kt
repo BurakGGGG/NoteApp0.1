@@ -1,11 +1,12 @@
 package com.burakgurgil.burak2.ui.theme
 
 enum class ThemeType {
+    PAPER,
+    MIDNIGHT,
+    FOCUS,
+    SUNSET,
+    FOREST,
+    TERMINAL,
     DEFAULT,
-    PASTEL,
-    DARK,
-    SPRING,
-    SUMMER,
-    AUTUMN,
-    WINTER
-} 
+    DARK
+}

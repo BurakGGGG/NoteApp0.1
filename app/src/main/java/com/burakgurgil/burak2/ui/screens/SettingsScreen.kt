@@ -13,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.burakgurgil.burak2.ui.theme.ThemeType
 import com.burakgurgil.burak2.ui.theme.themeColors
@@ -30,9 +32,12 @@ fun SettingsScreen(
     onThemeChange: (ThemeType) -> Unit,
     isAutoDeleteEnabled: Boolean,
     onAutoDeleteChange: (Boolean) -> Unit,
+    useDynamicColor: Boolean,
+    onDynamicColorChange: (Boolean) -> Unit,
     onExportNotes: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val currentColors = themeColors[currentTheme] ?: themeColors[ThemeType.DEFAULT]!!
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
 
@@ -51,6 +56,7 @@ fun SettingsScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             if (currentPage == SettingsPage.MAIN) {
                                 onDismiss()
                             } else {
@@ -95,7 +101,10 @@ fun SettingsScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { currentPage = SettingsPage.THEMES },
+                        .clickable { 
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            currentPage = SettingsPage.THEMES 
+                        },
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = currentColors.surface
@@ -145,6 +154,68 @@ fun SettingsScreen(
                             contentDescription = "İleri",
                             tint = currentColors.textSecondary,
                             modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = currentColors.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(currentColors.primary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Dinamik Renk",
+                                tint = currentColors.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Dinamik Renk",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = currentColors.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Duvar kağıdı renklerini kullan (Android 12+)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = currentColors.textSecondary.copy(alpha = 0.8f)
+                            )
+                        }
+                        Switch(
+                            checked = useDynamicColor,
+                            onCheckedChange = { 
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onDynamicColorChange(it) 
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
                         )
                     }
                 }
@@ -208,7 +279,10 @@ fun SettingsScreen(
                         }
                         Switch(
                             checked = isAutoDeleteEnabled,
-                            onCheckedChange = onAutoDeleteChange,
+                            onCheckedChange = { 
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onAutoDeleteChange(it) 
+                            },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                                 checkedTrackColor = MaterialTheme.colorScheme.primary
@@ -222,7 +296,10 @@ fun SettingsScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onExportNotes() },
+                        .clickable { 
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onExportNotes() 
+                        },
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = currentColors.surface
@@ -287,8 +364,68 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 ThemeOption(
-                    title = "Açık",
-                    description = "Modern ve ferah bir görünüm",
+                    title = "Kağıt",
+                    description = "Kirli beyaz ve siyah mürekkep",
+                    icon = CustomIcons.WhiteTheme,
+                    isSelected = currentTheme == ThemeType.PAPER,
+                    onClick = { onThemeChange(ThemeType.PAPER) },
+                    colors = currentColors,
+                    themeColors = themeColors[ThemeType.PAPER]!!
+                )
+                
+                ThemeOption(
+                    title = "Gece Yarısı",
+                    description = "Derin lacivert gece tonları",
+                    icon = CustomIcons.BlackTheme,
+                    isSelected = currentTheme == ThemeType.MIDNIGHT,
+                    onClick = { onThemeChange(ThemeType.MIDNIGHT) },
+                    colors = currentColors,
+                    themeColors = themeColors[ThemeType.MIDNIGHT]!!
+                )
+                
+                ThemeOption(
+                    title = "Odak",
+                    description = "Minimalist gri tonlar",
+                    icon = Icons.Default.Search,
+                    isSelected = currentTheme == ThemeType.FOCUS,
+                    onClick = { onThemeChange(ThemeType.FOCUS) },
+                    colors = currentColors,
+                    themeColors = themeColors[ThemeType.FOCUS]!!
+                )
+                
+                ThemeOption(
+                    title = "Gün Batımı",
+                    description = "Sıcak turuncu ve pembe tonları",
+                    icon = CustomIcons.AutumnTheme,
+                    isSelected = currentTheme == ThemeType.SUNSET,
+                    onClick = { onThemeChange(ThemeType.SUNSET) },
+                    colors = currentColors,
+                    themeColors = themeColors[ThemeType.SUNSET]!!
+                )
+                
+                ThemeOption(
+                    title = "Orman",
+                    description = "Koyu yeşil ve toprak tonları",
+                    icon = CustomIcons.SpringTheme,
+                    isSelected = currentTheme == ThemeType.FOREST,
+                    onClick = { onThemeChange(ThemeType.FOREST) },
+                    colors = currentColors,
+                    themeColors = themeColors[ThemeType.FOREST]!!
+                )
+                
+                ThemeOption(
+                    title = "Terminal",
+                    description = "Siyah üzerine neon yeşil",
+                    icon = Icons.Default.List,
+                    isSelected = currentTheme == ThemeType.TERMINAL,
+                    onClick = { onThemeChange(ThemeType.TERMINAL) },
+                    colors = currentColors,
+                    themeColors = themeColors[ThemeType.TERMINAL]!!
+                )
+                
+                ThemeOption(
+                    title = "Standart",
+                    description = "Modern ve ferah görünüm",
                     icon = CustomIcons.WhiteTheme,
                     isSelected = currentTheme == ThemeType.DEFAULT,
                     onClick = { onThemeChange(ThemeType.DEFAULT) },
@@ -297,53 +434,13 @@ fun SettingsScreen(
                 )
                 
                 ThemeOption(
-                    title = "Koyu",
-                    description = "Göz yorgunluğunu azaltan koyu mod",
+                    title = "Karanlık",
+                    description = "OLED siyah derinliği",
                     icon = CustomIcons.BlackTheme,
                     isSelected = currentTheme == ThemeType.DARK,
                     onClick = { onThemeChange(ThemeType.DARK) },
                     colors = currentColors,
                     themeColors = themeColors[ThemeType.DARK]!!
-                )
-                
-                ThemeOption(
-                    title = "İlkbahar",
-                    description = "Taze ve canlı yeşil tonları",
-                    icon = CustomIcons.SpringTheme,
-                    isSelected = currentTheme == ThemeType.SPRING,
-                    onClick = { onThemeChange(ThemeType.SPRING) },
-                    colors = currentColors,
-                    themeColors = themeColors[ThemeType.SPRING]!!
-                )
-                
-                ThemeOption(
-                    title = "Yaz",
-                    description = "Parlak ve enerjik sarı tonları",
-                    icon = CustomIcons.SummerTheme,
-                    isSelected = currentTheme == ThemeType.SUMMER,
-                    onClick = { onThemeChange(ThemeType.SUMMER) },
-                    colors = currentColors,
-                    themeColors = themeColors[ThemeType.SUMMER]!!
-                )
-                
-                ThemeOption(
-                    title = "Sonbahar",
-                    description = "Sıcak ve huzur veren turuncu tonları",
-                    icon = CustomIcons.AutumnTheme,
-                    isSelected = currentTheme == ThemeType.AUTUMN,
-                    onClick = { onThemeChange(ThemeType.AUTUMN) },
-                    colors = currentColors,
-                    themeColors = themeColors[ThemeType.AUTUMN]!!
-                )
-                
-                ThemeOption(
-                    title = "Kış",
-                    description = "Sakin ve ferah mavi tonları",
-                    icon = CustomIcons.WinterTheme,
-                    isSelected = currentTheme == ThemeType.WINTER,
-                    onClick = { onThemeChange(ThemeType.WINTER) },
-                    colors = currentColors,
-                    themeColors = themeColors[ThemeType.WINTER]!!
                 )
             }
         }
@@ -360,11 +457,15 @@ fun ThemeOption(
     colors: ThemeColors,
     themeColors: ThemeColors
 ) {
+    val haptic = LocalHapticFeedback.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .clickable(onClick = onClick),
+            .clickable(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = themeColors.surface

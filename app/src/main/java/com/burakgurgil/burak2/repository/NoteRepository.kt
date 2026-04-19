@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 class NoteRepository(private val noteDao: NoteDao) {
     val allNotes: Flow<List<Note>> = noteDao.getAllNotes()
     val deletedNotes: Flow<List<Note>> = noteDao.getDeletedNotes()
+    val archivedNotes: Flow<List<Note>> = noteDao.getArchivedNotes()
 
     suspend fun insert(note: Note): Long {
         return noteDao.insert(note)
@@ -43,4 +44,8 @@ class NoteRepository(private val noteDao: NoteDao) {
     suspend fun toggleLocked(noteId: Long, isLocked: Boolean) {
         noteDao.toggleLocked(noteId, isLocked)
     }
-} 
+
+    suspend fun toggleArchived(noteId: Long, isArchived: Boolean) {
+        noteDao.toggleArchived(noteId, isArchived)
+    }
+}

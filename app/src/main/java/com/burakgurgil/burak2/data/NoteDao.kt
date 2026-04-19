@@ -5,8 +5,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface NoteDao {
-    @Query("SELECT * FROM notes WHERE isDeleted = 0 ORDER BY isStarred DESC, createdAt DESC")
+    @Query("SELECT * FROM notes WHERE isDeleted = 0 AND isArchived = 0 ORDER BY isStarred DESC, createdAt DESC")
     fun getAllNotes(): Flow<List<Note>>
+
+    @Query("SELECT * FROM notes WHERE isDeleted = 0 AND isArchived = 1 ORDER BY createdAt DESC")
+    fun getArchivedNotes(): Flow<List<Note>>
 
     @Query("SELECT * FROM notes WHERE isDeleted = 1 ORDER BY createdAt DESC")
     fun getDeletedNotes(): Flow<List<Note>>
@@ -37,6 +40,9 @@ interface NoteDao {
 
     @Query("UPDATE notes SET isLocked = :isLocked WHERE id = :noteId")
     suspend fun toggleLocked(noteId: Long, isLocked: Boolean)
+
+    @Query("UPDATE notes SET isArchived = :isArchived WHERE id = :noteId")
+    suspend fun toggleArchived(noteId: Long, isArchived: Boolean)
 
     @Query("SELECT COUNT(*) FROM notes")
     suspend fun getNoteCount(): Int

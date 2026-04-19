@@ -20,6 +20,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private val _deletedNotes = MutableStateFlow<List<Note>>(emptyList())
     val deletedNotes: StateFlow<List<Note>> = _deletedNotes.asStateFlow()
 
+    private val _archivedNotes = MutableStateFlow<List<Note>>(emptyList())
+    val archivedNotes: StateFlow<List<Note>> = _archivedNotes.asStateFlow()
+
     init {
         val noteDao = NoteDatabase.getDatabase(application).noteDao()
         repository = NoteRepository(noteDao)
@@ -37,6 +40,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 repository.deletedNotes.collect { noteList ->
                     _deletedNotes.value = noteList
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                repository.archivedNotes.collect { noteList ->
+                    _archivedNotes.value = noteList
                 }
             }
         }
@@ -78,4 +89,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleLocked(noteId: Long, isLocked: Boolean) = viewModelScope.launch {
         repository.toggleLocked(noteId, isLocked)
     }
-} 
+
+    fun toggleArchived(noteId: Long, isArchived: Boolean) = viewModelScope.launch {
+        repository.toggleArchived(noteId, isArchived)
+    }
+}
